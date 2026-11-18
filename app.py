@@ -15,7 +15,6 @@ st.set_page_config(
 )
 # =====================================
 # PRIVATE MODEL BACKUP
-# =====================================
 
 BACKUP_PATH = (
     Path(__file__).parent /
