@@ -415,63 +415,77 @@ try:
             home_probability, away_probability
         )
 
+        # Find sportsbook odds for this matchup
+        odds_key = (
+            normalize_team_name(away_name),
+            normalize_team_name(home_name)
+        )
+
+        odds = odds_lookup.get(odds_key)
+
+        home_odds = None
+        away_odds = None
+        home_edge = None
+        away_edge = None
+        home_roi = None
+        away_roi = None
+        sportsbook = "Unavailable"
+
+        if odds:
+            home_odds = odds["home_odds"]
+            away_odds = odds["away_odds"]
+            sportsbook = odds["bookmaker"]
+
+            def implied_probability(price):
+                if price > 0:
+                    return 100 / (price + 100)
+                return abs(price) / (abs(price) + 100)
+
+            home_market = implied_probability(home_odds)
+            away_market = implied_probability(away_odds)
+
+            # Remove sportsbook margin
+            total_market = home_market + away_market
+            home_market /= total_market
+            away_market /= total_market
+
+            home_edge = home_probability - home_market
+            away_edge = away_probability - away_market
+
+            home_decimal = (
+                1 + home_odds / 100
+                if home_odds > 0
+                else 1 + 100 / abs(home_odds)
+            )
+
+            away_decimal = (
+                1 + away_odds / 100
+                if away_odds > 0
+                else 1 + 100 / abs(away_odds)
+            )
+
+            home_roi = (
+                home_probability * home_decimal - 1
+            )
+
+            away_roi = (
+                away_probability * away_decimal - 1
+            )
+
         predictions.append({
             "Game": f"{away_name} @ {home_name}",
             "Model Favorite": favorite,
             "Favorite Probability": favorite_probability,
             "Away Probability": away_probability,
             "Home Probability": home_probability,
+            "Sportsbook": sportsbook,
+            "Away Moneyline": away_odds,
+            "Home Moneyline": home_odds,
+            "Away Market Edge": away_edge,
+            "Home Market Edge": home_edge,
+            "Away Expected ROI": away_roi,
+            "Home Expected ROI": home_roi,
             "Game Time (UTC)": game_time.strftime("%I:%M %p")
         })
 
-    if predictions:
-        picks_df = pd.DataFrame(predictions)
-
-        picks_df = picks_df.sort_values(
-            "Favorite Probability",
-            ascending=False
-        )
-
-        st.success(
-            f"🟢 MODEL ONLINE — {len(picks_df)} games analyzed"
-        )
-
-        st.dataframe(
-            picks_df.style.format({
-                "Favorite Probability": "{:.2%}",
-                "Away Probability": "{:.2%}",
-                "Home Probability": "{:.2%}"
-            }),
-            use_container_width=True,
-            hide_index=True
-        )
-
-        csv_data = picks_df.to_csv(index=False).encode("utf-8")
-
-        st.download_button(
-            "📥 Download Today's Picks",
-            data=csv_data,
-            file_name="PARLAY_KINGZ_DAILY_PICKS.csv",
-            mime="text/csv"
-        )
-
-    else:
-        st.warning(
-            "No eligible upcoming games were found for today."
-        )
-
-    if skipped:
-        with st.expander(
-            f"Games skipped ({len(skipped)})"
-        ):
-            for reason in skipped:
-                st.write("• " + reason)
-
-except Exception as error:
-    st.error("The daily prediction engine encountered an issue.")
-    st.code(str(error))
-
-st.caption(
-    "PARLAY KINGZ | Existing trained model | "
-    "No automatic retraining"
 )
