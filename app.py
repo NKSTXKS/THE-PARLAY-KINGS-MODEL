@@ -392,24 +392,23 @@ def build_odds_lookup():
         st.warning(f"Odds feed unavailable: {error}")
         return {}
 
-try:
-    if page == "Daily Picks":
-         try:
+   if page == "Daily Picks":
+    try:
         schedule = get_daily_schedule(date_string)
-    team_lookup = build_team_lookup(raw_scores)
-    odds_lookup = build_odds_lookup()
+        team_lookup = build_team_lookup(raw_scores)
+        odds_lookup = build_odds_lookup()
 
-    predictions = []
-    skipped = []
+        predictions = []
+        skipped = []
 
-    for event in schedule.get("events", []):
-        status = (
-            event.get("status", {})
-            .get("type", {})
-            .get("state", "")
-        )
+         for event in schedule.get("events", []):
+             status = (
+                event.get("status", {})
+                .get("type", {})
+                .get("state", "")
+           )
 
-        if status != "pre":
+            if status != "pre":
             continue
 
         competition = event.get("competitions", [{}])[0]
