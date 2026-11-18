@@ -471,7 +471,7 @@ try:
             away_roi = (
                 away_probability * away_decimal - 1
             )
-
+            
         predictions.append({
             "Game": f"{away_name} @ {home_name}",
             "Model Favorite": favorite,
@@ -486,6 +486,75 @@ try:
             "Away Expected ROI": away_roi,
             "Home Expected ROI": home_roi,
             "Game Time (UTC)": game_time.strftime("%I:%M %p")
-            })    
+        })
+
+    # DISPLAY DAILY PICKS
+    if predictions:
+        picks_df = pd.DataFrame(predictions)
+
+        picks_df = picks_df.sort_values(
+            "Favorite Probability",
+            ascending=False
+        )
+
+        st.success(
+            f"MODEL ONLINE — {len(picks_df)} games analyzed"
+        )
+
+        percentage_columns = [
+            "Favorite Probability",
+            "Away Probability",
+            "Home Probability",
+            "Away Market Edge",
+            "Home Market Edge",
+            "Away Expected ROI",
+            "Home Expected ROI"
+        ]
+
+        st.dataframe(
+            picks_df.style.format(
+                {column: "{:.2%}" for column in percentage_columns},
+                na_rep="—"
+            ).format(
+                {
+                    "Away Moneyline": "{:+.0f}",
+                    "Home Moneyline": "{:+.0f}"
+                },
+                na_rep="—"
+            ),
+            use_container_width=True,
+            hide_index=True
+        )
+
+        csv_data = picks_df.to_csv(index=False).encode("utf-8")
+
+        st.download_button(
+            "Download Today's Picks",
+            data=csv_data,
+            file_name="PARLAY_KINGZ_DAILY_PICKS.csv",
+            mime="text/csv"
+        )
+
+    else:
+        st.warning(
+            "No eligible upcoming games were found for today."
+        )
+
+    if skipped:
+        with st.expander(f"Games skipped ({len(skipped)})"):
+            for reason in skipped:
+                st.write("• " + reason)
+
+except Exception as error:
+    st.error("The daily prediction engine encountered an issue.")
+    st.code(str(error))
+
+st.caption(
+    "PARLAY KINGZ | Existing trained model | "
+    "No automatic retraining"
+)
+
+
+          
 
 
