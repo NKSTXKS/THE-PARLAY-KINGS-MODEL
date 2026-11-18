@@ -394,7 +394,7 @@ def build_odds_lookup():
 
 try:
     if page == "Daily Picks":
-    try:
+         try:
         schedule = get_daily_schedule(date_string)
     team_lookup = build_team_lookup(raw_scores)
     odds_lookup = build_odds_lookup()
