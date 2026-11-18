@@ -22,6 +22,20 @@ BACKUP_PATH = (
 
     
 # =====================================
+# PARLAY KINGZ NAVIGATION
+# =====================================
+
+page = st.sidebar.radio(
+    "👑 PARLAY KINGZ",
+    [
+        "Home",
+        "Daily Picks",
+        "Model Information",
+        "Historical Data"
+    ]
+)
+
+# =====================================
 # PARLAY KINGZ HOMEPAGE
 # =====================================
 
