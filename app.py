@@ -19,38 +19,105 @@ st.set_page_config(
 # =====================================
 BACKUP_PATH = (
     Path(__file__).parent /
-    "PARLAY_KINGZ_PRIVATE_BACKUP.joblib"
-)
 
+    
 # =====================================
-# WEBSITE DESIGN
+# PARLAY KINGZ HOMEPAGE
 # =====================================
 
 st.markdown("""
 <style>
 .stApp {
-    background-color: #10131b;
+    background: linear-gradient(145deg, #080b12, #171b27);
     color: white;
 }
-h1 {
+h1, h2, h3 {
     color: #e5b93f;
+}
+.hero {
+    background: linear-gradient(135deg, #20202a, #090b10);
+    border: 1px solid #b99432;
+    border-radius: 18px;
+    padding: 35px 20px;
+    text-align: center;
+    margin-bottom: 25px;
+}
+.hero-title {
+    color: #e5b93f;
+    font-size: 42px;
+    font-weight: 900;
+    letter-spacing: 3px;
+}
+.hero-subtitle {
+    color: #ffffff;
+    font-size: 17px;
+    letter-spacing: 2px;
+}
+.hero-description {
+    color: #b8bdc9;
+    font-size: 14px;
+}
+.section-card {
+    background: #171d29;
+    border: 1px solid #343b49;
+    border-radius: 12px;
+    padding: 20px;
     text-align: center;
 }
-h2, h3 {
+.section-card h3 {
     color: #e5b93f;
 }
 </style>
+
+<div class="hero">
+    <div class="hero-title">👑 PARLAY KINGZ</div>
+    <div class="hero-subtitle">
+        DATA. DISCIPLINE. DOMINANCE.
+    </div>
+    <br>
+    <div class="hero-description">
+        Your home for data-driven college basketball predictions.
+        Powered by our existing trained prediction model.
+    </div>
+</div>
 """, unsafe_allow_html=True)
 
-st.title("👑 PARLAY KINGZ")
-st.markdown(
-    "<p style='text-align:center;'>"
-    "COLLEGE BASKETBALL MODEL"
-    "</p>",
-    unsafe_allow_html=True
+st.markdown("## WELCOME TO THE KINGDOM")
+
+st.write(
+    "Access daily college basketball predictions, "
+    "model probabilities, historical performance, "
+    "and available sportsbook market comparisons."
 )
 
+home_col1, home_col2, home_col3 = st.columns(3)
+
+with home_col1:
+    st.markdown("""
+    <div class="section-card">
+        <h3>🏀 DAILY PICKS</h3>
+        <p>Today's model predictions</p>
+    </div>
+    """, unsafe_allow_html=True)
+
+with home_col2:
+    st.markdown("""
+    <div class="section-card">
+        <h3>📊 MODEL DATA</h3>
+        <p>Probabilities and analysis</p>
+    </div>
+    """, unsafe_allow_html=True)
+
+with home_col3:
+    st.markdown("""
+    <div class="section-card">
+        <h3>📈 PERFORMANCE</h3>
+        <p>Historical model records</p>
+    </div>
+    """, unsafe_allow_html=True)
+
 st.divider()
+
 
 # =====================================
 # LOAD EXISTING MODEL
