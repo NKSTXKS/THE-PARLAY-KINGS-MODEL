@@ -38,7 +38,8 @@ page = st.sidebar.radio(
 # =====================================
 # PARLAY KINGZ HOMEPAGE
 # =====================================
-
+if page == "Home":  
+    
 st.markdown("""
 <style>
 .stApp {
@@ -205,13 +206,31 @@ st.write("Historical score records:", f"{len(raw_scores):,}")
 st.write("Master ledger records:", f"{len(ledger):,}")
 
 # =====================================
+# =====================================
+# DAILY PICKS PAGE
+# =====================================
 
+if page == "Daily Picks":
+    st.title("🏀 DAILY KINGZ PICKS")
+    st.write("Today's college basketball model predictions.")
+
+elif page == "Model Information":
+    st.title("📊 MODEL INFORMATION")
+    st.write("PARLAY KINGZ trained model and calibration details.")
+
+elif page == "Historical Data":
+    st.title("📚 HISTORICAL PERFORMANCE")
+    st.write("Historical scores and model records.")
+
+else:
+    st.title("👑 WELCOME TO THE KINGDOM")
 # =====================================
 # DAILY PICKS - LIVE PREDICTION ENGINE
 # =====================================
 
-st.divider()
-st.header("🏀 PARLAY KINGZ — DAILY PICKS")
+if page == "Daily Picks":
+    st.divider()
+    st.header("🏀 PARLAY KINGZ — DAILY PICKS")
 
 # Today's date in Arizona
 today = datetime.now(ZoneInfo("America/Phoenix"))
@@ -379,7 +398,9 @@ def build_odds_lookup():
         return {}
 
 try:
-    schedule = get_daily_schedule(date_string)
+    if page == "Daily Picks":
+    try:
+        schedule = get_daily_schedule(date_string)
     team_lookup = build_team_lookup(raw_scores)
     odds_lookup = build_odds_lookup()
 
