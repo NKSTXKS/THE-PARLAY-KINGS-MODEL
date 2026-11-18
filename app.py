@@ -223,14 +223,13 @@ elif page == "Historical Data":
 # =====================================
 
 if page == "Daily Picks":
+
     st.divider()
     st.header("🏀 PARLAY KINGZ — DAILY PICKS")
 
-if page == "Daily Picks":
-
     # Today's date in Arizona
-today = datetime.now(ZoneInfo("America/Phoenix"))
-date_string = today.strftime("%Y%m%d")
+    today = datetime.now(ZoneInfo("America/Phoenix"))
+    date_string = today.strftime("%Y%m%d")
 
 ESPN_URL = (
     "https://site.api.espn.com/apis/site/v2/sports/"
