@@ -1,0 +1,61 @@
+
+import streamlit as st
+import joblib
+from pathlib import Path
+
+st.set_page_config(
+    page_title="PARLAY KINGZ",
+    page_icon="👑",
+    layout="wide"
+)
+
+st.title("👑 PARLAY KINGZ")
+st.subheader("College Basketball Prediction Model")
+st.caption("Private model dashboard")
+
+BACKUP_PATH = Path(__file__).parent / "PARLAY_KINGZ_PRIVATE_BACKUP.joblib"
+
+st.divider()
+
+if not BACKUP_PATH.exists():
+    st.error("Model backup not found.")
+    st.write("Check that the backup file is in the repository.")
+    st.stop()
+
+try:
+    backup = joblib.load(BACKUP_PATH)
+
+    model = backup["base_model"]
+    calibrator = backup["calibrator"]
+    features = backup["features"]
+
+    if model.n_features_in_ != len(features):
+        raise ValueError("Model feature count does not match.")
+
+    st.success("PARLAY KINGZ MODEL LOADED")
+
+    col1, col2, col3 = st.columns(3)
+
+    col1.metric("Model Status", "ONLINE")
+    col2.metric("Model Features", len(features))
+    col3.metric("Historical Games", f'{len(backup["safe_games"]):,}')
+
+    st.divider()
+    st.subheader("Existing Model")
+
+    st.write("Prediction engine: Random Forest")
+    st.write("Probability calibration: Sigmoid")
+    st.write("Model retraining: Disabled")
+
+    with st.expander("View model features"):
+        for feature in features:
+            st.write(f"• {feature}")
+
+    st.info(
+        "The original trained model is loaded. "
+        "Daily prediction functionality is the next build step."
+    )
+
+except Exception as error:
+    st.error("The model could not be loaded.")
+    st.code(str(error))
