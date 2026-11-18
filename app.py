@@ -4,27 +4,382 @@ import joblib
 import requests
 import pandas as pd
 import numpy as np
-import re
 
 from pathlib import Path
 from datetime import datetime
 from zoneinfo import ZoneInfo
 
 
-# ==========================================
-# PAGE CONFIGURATION
-# ==========================================
+# =========================================================
+# PAGE SETTINGS
+# =========================================================
 
 st.set_page_config(
     page_title="PARLAY KINGZ",
     page_icon="👑",
-    layout="wide"
+    layout="wide",
+    initial_sidebar_state="collapsed"
 )
+
+
+# =========================================================
+# DESIGN
+# =========================================================
+
+st.markdown("""
+<style>
+    .stApp {
+        background-color: #080b12;
+        color: #ffffff;
+    }
+
+    h1, h2, h3 {
+        color: #ffffff;
+    }
+
+    .main-title {
+        text-align: center;
+        font-size: 38px;
+        font-weight: 900;
+        color: #d4af37;
+        margin-bottom: 0;
+    }
+
+    .subtitle {
+        text-align: center;
+        color: #b8c0cc;
+        font-size: 14px;
+        margin-bottom: 25px;
+    }
+
+    .pick-card {
+        background: #151c29;
+        border: 1px solid #35445c;
+        border-radius: 12px;
+        padding: 18px;
+        margin-bottom: 14px;
+    }
+
+    .pick-team {
+        color: #ffffff;
+        font-size: 21px;
+        font-weight: 800;
+    }
+
+    .pick-label {
+        color: #d4af37;
+        font-size: 13px;
+        font-weight: 700;
+    }
+
+    .pick-probability {
+        color: #39d98a;
+        font-size: 25px;
+        font-weight: 900;
+    }
+
+    div[data-testid="stMetric"] {
+        background: #151c29;
+        border: 1px solid #35445c;
+        padding: 12px;
+        border-radius: 10px;
+    }
+
+    div.stButton > button {
+        width: 100%;
+        border-radius: 8px;
+        font-weight: 700;
+    }
+
+    [data-testid="stRadio"] {
+        background: #151c29;
+        padding: 12px;
+        border-radius: 10px;
+    }
+
+    footer {
+        visibility: hidden;
+    }
+</style>
+""", unsafe_allow_html=True)
+
+
+# =========================================================
+# HEADER
+# =========================================================
+
+st.markdown(
+    '<div class="main-title">👑 PARLAY KINGZ</div>',
+    unsafe_allow_html=True
+)
+
+st.markdown(
+    '<div class="subtitle">COLLEGE BASKETBALL PREDICTION ENGINE</div>',
+    unsafe_allow_html=True
+)
+
+
+# =========================================================
+# NAVIGATION - MAIN SCREEN, NOT SIDEBAR
+# =========================================================
+
+pages = [
+    "🏠 Home",
+    "🎯 Daily Picks",
+    "🧠 Model Information",
+    "📊 Historical Data"
+]
+
+if "selected_page" not in st.session_state:
+    st.session_state.selected_page = "🏠 Home"
+
+selected_page = st.radio(
+    "Navigation",
+    pages,
+    horizontal=True,
+    label_visibility="collapsed",
+    key="selected_page"
+)
+
+st.divider()
+
+
+# =========================================================
+# MODEL BACKUP
+# =========================================================
 
 BACKUP_PATH = (
     Path(__file__).parent /
     "PARLAY_KINGZ_PRIVATE_BACKUP.joblib"
 )
+
+REQUIRED_FEATURES = [
+    "home_avg_scored",
+    "home_avg_allowed",
+    "home_win_rate",
+    "away_avg_scored",
+    "away_avg_allowed",
+    "away_win_rate"
+]
+
+
+@st.cache_resource
+def load_private_model():
+
+    if not BACKUP_PATH.exists():
+        raise FileNotFoundError(
+            "PARLAY_KINGZ_PRIVATE_BACKUP.joblib "
+            "was not found in the repository."
+        )
+
+    backup = joblib.load(BACKUP_PATH)
+
+    required_items = [
+        "base_model",
+        "calibrator",
+        "raw_scores",
+        "features"
+    ]
+
+    for item in required_items:
+        if item not in backup:
+            raise ValueError(
+                f"Model backup is missing: {item}"
+            )
+
+    model = backup["base_model"]
+    calibrator = backup["calibrator"]
+    raw_scores = backup["raw_scores"]
+    features = list(backup["features"])
+
+    if features != REQUIRED_FEATURES:
+        raise ValueError(
+            "The saved model feature order does not match "
+            "the prediction engine."
+        )
+
+    if model.n_features_in_ != len(REQUIRED_FEATURES):
+        raise ValueError(
+            "The saved model has an unexpected feature count."
+        )
+
+    if "game_date_time" not in raw_scores.columns:
+        raise ValueError(
+            "Historical data is missing game_date_time."
+        )
+
+    raw_scores = raw_scores.copy()
+
+    raw_scores["game_date_time"] = pd.to_datetime(
+        raw_scores["game_date_time"],
+        utc=True,
+        errors="coerce"
+    )
+
+    raw_scores = raw_scores.dropna(
+        subset=[
+            "game_date_time",
+            "team_id",
+            "team_score",
+            "opponent_team_score"
+        ]
+    )
+
+    return backup, model, calibrator, raw_scores
+
+
+# =========================================================
+# LOAD MODEL SAFELY
+# =========================================================
+
+try:
+    backup, model, calibrator, raw_scores = load_private_model()
+
+    MODEL_READY = True
+
+except Exception as error:
+
+    MODEL_READY = False
+
+    st.error("The prediction model could not be loaded.")
+    st.code(str(error))
+
+    st.stop()
+
+
+# =========================================================
+# TEAM NAME HELPERS
+# =========================================================
+
+def normalize_name(name):
+
+    return "".join(
+        character.lower()
+        for character in str(name)
+        if character.isalnum()
+    )
+
+
+def build_team_lookup(data):
+
+    lookup = {}
+
+    name_columns = [
+        "team_display_name",
+        "team_name",
+        "team_location",
+        "team_short_display_name",
+        "team_abbreviation"
+    ]
+
+    available_columns = [
+        column
+        for column in name_columns
+        if column in data.columns
+    ]
+
+    for _, row in data[
+        ["team_id"] + available_columns
+    ].drop_duplicates().iterrows():
+
+        team_id = int(row["team_id"])
+
+        for column in available_columns:
+
+            value = row[column]
+
+            if pd.notna(value):
+
+                key = normalize_name(value)
+
+                if key:
+                    lookup[key] = team_id
+
+    # Known ESPN/historical name differences
+    aliases = {
+        "bludevils": 150,
+        "duke": 150,
+        "fightingillini": 356,
+        "illinois": 356
+    }
+
+    lookup.update(aliases)
+
+    return lookup
+
+
+TEAM_LOOKUP = build_team_lookup(raw_scores)
+
+
+def find_team_id(team):
+
+    possible_names = [
+        team.get("displayName"),
+        team.get("name"),
+        team.get("shortDisplayName"),
+        team.get("location"),
+        team.get("abbreviation")
+    ]
+
+    for name in possible_names:
+
+        if not name:
+            continue
+
+        key = normalize_name(name)
+
+        if key in TEAM_LOOKUP:
+            return TEAM_LOOKUP[key]
+
+    return None
+
+
+# =========================================================
+# HISTORICAL TEAM FORM
+# =========================================================
+
+def get_team_statistics(team_id, game_time):
+
+    cutoff_time = (
+        game_time - pd.Timedelta(hours=3)
+    )
+
+    team_games = raw_scores[
+        (raw_scores["team_id"] == team_id) &
+        (raw_scores["game_date_time"] < cutoff_time)
+    ].copy()
+
+    team_games = team_games.sort_values(
+        "game_date_time",
+        ascending=False
+    ).head(5)
+
+    if len(team_games) < 3:
+        return None
+
+    return {
+        "avg_scored": float(
+            team_games["team_score"].mean()
+        ),
+
+        "avg_allowed": float(
+            team_games["opponent_team_score"].mean()
+        ),
+
+        "win_rate": float(
+            team_games["team_winner"]
+            .fillna(False)
+            .astype(bool)
+            .mean()
+        ),
+
+        "games_used": len(team_games)
+    }
+
+
+# =========================================================
+# ESPN DAILY SCHEDULE
+# =========================================================
 
 ESPN_URL = (
     "https://site.api.espn.com/apis/site/v2/sports/"
@@ -32,192 +387,12 @@ ESPN_URL = (
 )
 
 
-# ==========================================
-# WEBSITE DESIGN
-# ==========================================
-
-st.markdown("""
-<style>
-.stApp {
-    background: linear-gradient(145deg, #080b12, #171b27);
-    color: white;
-}
-h1, h2, h3 {
-    color: #e5b93f;
-}
-.hero {
-    background: linear-gradient(135deg, #20202a, #090b10);
-    border: 1px solid #b99432;
-    border-radius: 18px;
-    padding: 35px 20px;
-    text-align: center;
-    margin-bottom: 25px;
-}
-.hero-title {
-    color: #e5b93f;
-    font-size: 42px;
-    font-weight: 900;
-    letter-spacing: 3px;
-}
-.hero-subtitle {
-    color: white;
-    font-size: 17px;
-    letter-spacing: 2px;
-}
-.hero-description {
-    color: #b8bdc9;
-    font-size: 14px;
-}
-.section-card {
-    background: #171d29;
-    border: 1px solid #343b49;
-    border-radius: 12px;
-    padding: 20px;
-    text-align: center;
-}
-.section-card h3 {
-    color: #e5b93f;
-}
-div[data-testid="stMetric"] {
-    background: #171d29;
-    border: 1px solid #343b49;
-    padding: 15px;
-    border-radius: 12px;
-}
-</style>
-""", unsafe_allow_html=True)
-
-
-# ==========================================
-# NAVIGATION
-# ==========================================
-
-page = st.sidebar.radio(
-    "👑 PARLAY KINGZ",
-    [
-        "Home",
-        "Daily Picks",
-        "Model Information",
-        "Historical Data"
-    ]
-)
-
-
-# ==========================================
-# LOAD EXISTING MODEL BACKUP
-# ==========================================
-
-@st.cache_resource
-def load_model():
-
-    backup = joblib.load(BACKUP_PATH)
-
-    return (
-        backup["base_model"],
-        backup["calibrator"],
-        backup["raw_scores"],
-        backup["safe_games"],
-        backup["master_ledger"],
-        backup["features"]
-    )
-
-
-if not BACKUP_PATH.exists():
-    st.error("Model backup file not found.")
-    st.stop()
-
-try:
-    (
-        model,
-        calibrator,
-        raw_scores,
-        safe_games,
-        ledger,
-        features
-    ) = load_model()
-
-    features = list(features)
-
-    required_features = [
-        "home_avg_scored",
-        "home_avg_allowed",
-        "home_win_rate",
-        "away_avg_scored",
-        "away_avg_allowed",
-        "away_win_rate"
-    ]
-
-    if features != required_features:
-        st.error("Saved model feature order does not match.")
-        st.stop()
-
-    if model.n_features_in_ != len(features):
-        st.error("Model feature count mismatch.")
-        st.stop()
-
-except Exception as error:
-    st.error("Unable to load the existing model.")
-    st.code(str(error))
-    st.stop()
-
-
-# ==========================================
-# TEAM NAME HELPERS
-# ==========================================
-
-def normalize_team_name(name):
-    return re.sub(
-        r"[^a-z0-9]",
-        "",
-        str(name).lower()
-    )
-
-
-def build_team_lookup(data):
-
-    name_columns = [
-        "team_display_name",
-        "team_name",
-        "team_location",
-        "team_short_display_name",
-        "team_abbreviation",
-        "team_nickname"
-    ]
-
-    lookup = {}
-
-    for column in name_columns:
-
-        if column not in data.columns:
-            continue
-
-        for team_id, name in zip(
-            data["team_id"],
-            data[column]
-        ):
-
-            if pd.notna(name):
-                lookup[
-                    normalize_team_name(name)
-                ] = int(team_id)
-
-    return lookup
-
-
-# ==========================================
-# ESPN SCHEDULE
-# ==========================================
-
-@st.cache_data(ttl=300)
-def get_daily_schedule(date_value):
+@st.cache_data(ttl=300, show_spinner=False)
+def get_daily_schedule(date_string):
 
     response = requests.get(
         ESPN_URL,
-        params={
-            "dates": date_value,
-            "groups": 50,
-            "limit": 500
-        },
+        params={"dates": date_string},
         timeout=20
     )
 
@@ -226,334 +401,44 @@ def get_daily_schedule(date_value):
     return response.json()
 
 
-# ==========================================
-# SPORTSBOOK ODDS
-# ==========================================
+# =========================================================
+# CALIBRATED MODEL PREDICTION
+# =========================================================
 
-@st.cache_data(ttl=300)
-def get_college_basketball_odds():
+def calculate_prediction(features):
 
-    api_key = st.secrets.get("ODDS_API_KEY")
-
-    if not api_key:
-        raise ValueError(
-            "ODDS_API_KEY is missing from Streamlit Secrets."
-        )
-
-    url = (
-        "https://api.the-odds-api.com/v4/sports/"
-        "basketball_ncaab/odds"
+    feature_frame = pd.DataFrame(
+        [features],
+        columns=REQUIRED_FEATURES
     )
 
-    response = requests.get(
-        url,
-        params={
-            "apiKey": api_key,
-            "regions": "us",
-            "markets": "h2h",
-            "oddsFormat": "american"
-        },
-        timeout=20
+    base_probability = model.predict_proba(
+        feature_frame
+    )[0][1]
+
+    base_probability = np.clip(
+        base_probability,
+        0.000001,
+        0.999999
     )
 
-    response.raise_for_status()
-
-    return response.json()
-
-
-def build_odds_lookup():
-
-    try:
-        events = get_college_basketball_odds()
-        lookup = {}
-
-        for event in events:
-
-            home_name = event.get("home_team", "")
-            away_name = event.get("away_team", "")
-
-            home_key = normalize_team_name(home_name)
-            away_key = normalize_team_name(away_name)
-
-            for bookmaker in event.get("bookmakers", []):
-
-                for market in bookmaker.get("markets", []):
-
-                    if market.get("key") != "h2h":
-                        continue
-
-                    prices = {}
-
-                    for outcome in market.get("outcomes", []):
-
-                        prices[
-                            normalize_team_name(
-                                outcome.get("name", "")
-                            )
-                        ] = outcome.get("price")
-
-                    if home_key in prices and away_key in prices:
-
-                        lookup[(away_key, home_key)] = {
-                            "home_odds": prices[home_key],
-                            "away_odds": prices[away_key],
-                            "bookmaker": bookmaker.get(
-                                "title",
-                                "Sportsbook"
-                            )
-                        }
-
-                if (away_key, home_key) in lookup:
-                    break
-
-        return lookup
-
-    except Exception as error:
-        st.warning(
-            f"Sportsbook odds unavailable: {error}"
-        )
-        return {}
-
-
-# ==========================================
-# HISTORICAL TEAM FORM
-# ==========================================
-
-def get_team_form(team_id, game_time):
-
-    history = raw_scores.copy()
-
-    history["parsed_time"] = pd.to_datetime(
-        history["game_date_time"],
-        utc=True,
-        errors="coerce"
+    base_logit = np.log(
+        base_probability /
+        (1 - base_probability)
     )
 
-    cutoff = (
-        pd.Timestamp(game_time) -
-        pd.Timedelta(hours=3)
-    )
+    calibrated_probability = calibrator.predict_proba(
+        np.array([[base_logit]])
+    )[0][1]
 
-    history = history[
-        (history["team_id"] == team_id) &
-        (history["parsed_time"] < cutoff)
-    ].copy()
-
-    history = history.sort_values(
-        "parsed_time"
-    ).tail(5)
-
-    if len(history) < 3:
-        return None
-
-    points_allowed_column = next(
-        (
-            column
-            for column in [
-                "opponent_team_score",
-                "team_points_allowed",
-                "opponent_score"
-            ]
-            if column in history.columns
-        ),
-        None
-    )
-
-    if points_allowed_column is None:
-        raise ValueError(
-            "Historical points-allowed column not found."
-        )
-
-    return {
-        "avg_scored": pd.to_numeric(
-            history["team_score"],
-            errors="coerce"
-        ).mean(),
-
-        "avg_allowed": pd.to_numeric(
-            history[points_allowed_column],
-            errors="coerce"
-        ).mean(),
-
-        "win_rate": history["team_winner"].astype(float).mean()
-    }
+    return float(calibrated_probability)
 
 
-# ==========================================
-# HOME PAGE
-# ==========================================
+# =========================================================
+# DAILY PREDICTION ENGINE
+# =========================================================
 
-if page == "Home":
-
-    st.markdown("""
-    <div class="hero">
-        <div class="hero-title">👑 PARLAY KINGZ</div>
-        <div class="hero-subtitle">
-            DATA. DISCIPLINE. DOMINANCE.
-        </div>
-        <br>
-        <div class="hero-description">
-            Your home for data-driven college basketball predictions.
-            Powered by our existing trained prediction model.
-        </div>
-    </div>
-    """, unsafe_allow_html=True)
-
-    st.markdown("## WELCOME TO THE KINGDOM")
-
-    st.write(
-        "Access daily college basketball predictions, "
-        "model probabilities, historical performance, "
-        "and sportsbook market comparisons."
-    )
-
-    col1, col2, col3 = st.columns(3)
-
-    with col1:
-        st.markdown("""
-        <div class="section-card">
-            <h3>🏀 DAILY PICKS</h3>
-            <p>Today's model predictions</p>
-        </div>
-        """, unsafe_allow_html=True)
-
-    with col2:
-        st.markdown("""
-        <div class="section-card">
-            <h3>📊 MODEL DATA</h3>
-            <p>Model probabilities and analysis</p>
-        </div>
-        """, unsafe_allow_html=True)
-
-    with col3:
-        st.markdown("""
-        <div class="section-card">
-            <h3>📈 PERFORMANCE</h3>
-            <p>Historical model records</p>
-        </div>
-        """, unsafe_allow_html=True)
-
-    st.divider()
-
-    st.subheader("MODEL STATUS")
-
-    col1, col2, col3 = st.columns(3)
-
-    col1.metric("MODEL STATUS", "ONLINE")
-    col2.metric("MODEL FEATURES", len(features))
-    col3.metric(
-        "HISTORICAL GAMES",
-        f"{len(safe_games):,}"
-    )
-
-
-# ==========================================
-# MODEL INFORMATION PAGE
-# ==========================================
-
-elif page == "Model Information":
-
-    st.title("📊 MODEL INFORMATION")
-
-    st.success("🟢 EXISTING MODEL LOADED")
-
-    st.write("**Model:** Random Forest Classifier")
-    st.write("**Calibration:** Sigmoid / Logistic Regression")
-    st.write("**Training:** Existing trained model")
-    st.write("**Automatic retraining:** Disabled")
-
-    st.divider()
-
-    st.subheader("MODEL FEATURES")
-
-    for number, feature in enumerate(features, start=1):
-        st.write(f"{number}. {feature}")
-
-    st.divider()
-
-    col1, col2 = st.columns(2)
-
-    col1.metric("FEATURE COUNT", len(features))
-    col2.metric("HISTORICAL GAMES", f"{len(safe_games):,}")
-
-    st.info(
-        "The model uses historical team performance "
-        "to estimate the probability of a home-team win."
-    )
-
-
-# ==========================================
-# HISTORICAL DATA PAGE
-# ==========================================
-
-elif page == "Historical Data":
-
-    st.title("📚 HISTORICAL MODEL DATA")
-
-    col1, col2, col3 = st.columns(3)
-
-    col1.metric(
-        "RAW SCORE RECORDS",
-        f"{len(raw_scores):,}"
-    )
-
-    col2.metric(
-        "SAFE GAME RECORDS",
-        f"{len(safe_games):,}"
-    )
-
-    col3.metric(
-        "LEDGER RECORDS",
-        f"{len(ledger):,}"
-    )
-
-    st.divider()
-
-    st.subheader("MASTER LEDGER")
-
-    if isinstance(ledger, pd.DataFrame) and not ledger.empty:
-        st.dataframe(
-            ledger,
-            use_container_width=True,
-            hide_index=True
-        )
-    else:
-        st.info("No master ledger records available.")
-
-    st.divider()
-
-    st.subheader("HISTORICAL SCORES")
-
-    if isinstance(raw_scores, pd.DataFrame) and not raw_scores.empty:
-
-        st.dataframe(
-            raw_scores.tail(100),
-            use_container_width=True,
-            hide_index=True
-        )
-
-        csv_data = raw_scores.to_csv(
-            index=False
-        ).encode("utf-8")
-
-        st.download_button(
-            "Download Historical Scores",
-            data=csv_data,
-            file_name="PARLAY_KINGZ_HISTORICAL_SCORES.csv",
-            mime="text/csv"
-        )
-
-    else:
-        st.info("No historical score records available.")
-
-
-# ==========================================
-# DAILY PICKS PAGE
-# ==========================================
-
-elif page == "Daily Picks":
-
-    st.title("🏀 PARLAY KINGZ — DAILY PICKS")
+def generate_daily_picks():
 
     today = datetime.now(
         ZoneInfo("America/Phoenix")
@@ -561,343 +446,353 @@ elif page == "Daily Picks":
 
     date_string = today.strftime("%Y%m%d")
 
-    st.caption(
-        f"Game date: {today.strftime('%B %d, %Y')} | Arizona time"
+    schedule = get_daily_schedule(date_string)
+
+    predictions = []
+    skipped = []
+
+    events = schedule.get("events", [])
+
+    for event in events:
+
+        status = (
+            event.get("status", {})
+            .get("type", {})
+            .get("state", "")
+        )
+
+        if status != "pre":
+            continue
+
+        competition = (
+            event.get("competitions", [{}])[0]
+        )
+
+        competitors = competition.get(
+            "competitors", []
+        )
+
+        home_team = None
+        away_team = None
+
+        for competitor in competitors:
+
+            team = competitor.get("team", {})
+
+            if competitor.get("homeAway") == "home":
+                home_team = team
+
+            elif competitor.get("homeAway") == "away":
+                away_team = team
+
+        if not home_team or not away_team:
+            skipped.append(
+                "A game was missing home or away team information."
+            )
+            continue
+
+        home_id = find_team_id(home_team)
+        away_id = find_team_id(away_team)
+
+        if home_id is None or away_id is None:
+
+            skipped.append(
+                f"Could not match: "
+                f"{home_team.get('displayName', 'Home')} "
+                f"vs. "
+                f"{away_team.get('displayName', 'Away')}"
+            )
+
+            continue
+
+        event_time = pd.to_datetime(
+            event.get("date"),
+            utc=True,
+            errors="coerce"
+        )
+
+        if pd.isna(event_time):
+            continue
+
+        home_stats = get_team_statistics(
+            home_id,
+            event_time
+        )
+
+        away_stats = get_team_statistics(
+            away_id,
+            event_time
+        )
+
+        if home_stats is None or away_stats is None:
+
+            skipped.append(
+                f"Not enough historical games: "
+                f"{home_team.get('displayName')} "
+                f"vs. "
+                f"{away_team.get('displayName')}"
+            )
+
+            continue
+
+        features = [
+            home_stats["avg_scored"],
+            home_stats["avg_allowed"],
+            home_stats["win_rate"],
+            away_stats["avg_scored"],
+            away_stats["avg_allowed"],
+            away_stats["win_rate"]
+        ]
+
+        home_probability = calculate_prediction(
+            features
+        )
+
+        away_probability = 1 - home_probability
+
+        if home_probability >= away_probability:
+
+            predicted_winner = home_team.get(
+                "displayName", "Home Team"
+            )
+
+            winning_probability = home_probability
+
+        else:
+
+            predicted_winner = away_team.get(
+                "displayName", "Away Team"
+            )
+
+            winning_probability = away_probability
+
+        local_game_time = event_time.tz_convert(
+            "America/Phoenix"
+        )
+
+        predictions.append({
+
+            "Game": (
+                f"{away_team.get('displayName')} "
+                f"@ "
+                f"{home_team.get('displayName')}"
+            ),
+
+            "Away Team": away_team.get(
+                "displayName", "Away"
+            ),
+
+            "Home Team": home_team.get(
+                "displayName", "Home"
+            ),
+
+            "Predicted Winner": predicted_winner,
+
+            "Win Probability": winning_probability,
+
+            "Home Probability": home_probability,
+
+            "Away Probability": away_probability,
+
+            "Game Time": local_game_time.strftime(
+                "%I:%M %p"
+            ),
+
+            "Home Games Used": home_stats["games_used"],
+
+            "Away Games Used": away_stats["games_used"]
+
+        })
+
+    predictions.sort(
+        key=lambda item: item["Win Probability"],
+        reverse=True
     )
 
-    if st.button("🔄 REFRESH DAILY PICKS"):
+    return predictions, skipped
 
-        get_daily_schedule.clear()
-        get_college_basketball_odds.clear()
 
-        st.rerun()
+# =========================================================
+# HOME PAGE
+# =========================================================
+
+if selected_page == "🏠 Home":
+
+    st.subheader("Welcome to PARLAY KINGZ 👑")
+
+    st.write(
+        "Your college basketball prediction dashboard."
+    )
+
+    today = datetime.now(
+        ZoneInfo("America/Phoenix")
+    )
+
+    st.caption(
+        f"Arizona Date: {today.strftime('%B %d, %Y')}"
+    )
+
+    col1, col2, col3 = st.columns(3)
+
+    col1.metric(
+        "Model Status",
+        "ONLINE" if MODEL_READY else "OFFLINE"
+    )
+
+    col2.metric(
+        "Historical Records",
+        f"{len(raw_scores):,}"
+    )
+
+    col3.metric(
+        "Model Features",
+        len(REQUIRED_FEATURES)
+    )
 
     st.divider()
 
+    st.subheader("Dashboard Navigation")
+
+    st.write(
+        "Use the navigation buttons above to access "
+        "today's predictions, model information, "
+        "and historical data."
+    )
+
+    st.info(
+        "Select Daily Picks to generate today's "
+        "college basketball predictions."
+    )
+
+
+# =========================================================
+# DAILY PICKS PAGE
+# =========================================================
+
+elif selected_page == "🎯 Daily Picks":
+
+    st.subheader("🎯 Today's Daily Picks")
+
+    today = datetime.now(
+        ZoneInfo("America/Phoenix")
+    )
+
+    st.caption(
+        today.strftime("%A, %B %d, %Y")
+    )
+
+    if st.button(
+        "🔄 Refresh Today's Predictions",
+        use_container_width=True
+    ):
+
+        get_daily_schedule.clear()
+
     try:
 
-        with st.spinner("Analyzing today's games..."):
+        with st.spinner(
+            "Analyzing today's college basketball games..."
+        ):
 
-            schedule = get_daily_schedule(date_string)
+            predictions, skipped = generate_daily_picks()
 
-            team_lookup = build_team_lookup(raw_scores)
+        if not predictions:
 
-            odds_lookup = build_odds_lookup()
-
-            predictions = []
-            skipped = []
-
-            for event in schedule.get("events", []):
-
-                status = (
-                    event.get("status", {})
-                    .get("type", {})
-                    .get("state", "")
-                )
-
-                if status != "pre":
-                    continue
-
-                competition = event.get(
-                    "competitions",
-                    [{}]
-                )[0]
-
-                competitors = competition.get(
-                    "competitors",
-                    []
-                )
-
-                home = next(
-                    (
-                        team for team in competitors
-                        if team.get("homeAway") == "home"
-                    ),
-                    None
-                )
-
-                away = next(
-                    (
-                        team for team in competitors
-                        if team.get("homeAway") == "away"
-                    ),
-                    None
-                )
-
-                if not home or not away:
-                    continue
-
-                game_time = pd.to_datetime(
-                    event.get("date"),
-                    utc=True,
-                    errors="coerce"
-                )
-
-                if pd.isna(game_time):
-                    continue
-
-                home_name = home.get(
-                    "team", {}
-                ).get("displayName", "Home")
-
-                away_name = away.get(
-                    "team", {}
-                ).get("displayName", "Away")
-
-                home_id = team_lookup.get(
-                    normalize_team_name(home_name)
-                )
-
-                away_id = team_lookup.get(
-                    normalize_team_name(away_name)
-                )
-
-                if home_id is None or away_id is None:
-
-                    skipped.append(
-                        f"{away_name} vs {home_name}: "
-                        "team not matched"
-                    )
-
-                    continue
-
-                home_form = get_team_form(
-                    home_id,
-                    game_time
-                )
-
-                away_form = get_team_form(
-                    away_id,
-                    game_time
-                )
-
-                if home_form is None or away_form is None:
-
-                    skipped.append(
-                        f"{away_name} vs {home_name}: "
-                        "insufficient history"
-                    )
-
-                    continue
-
-                feature_row = {
-                    "home_avg_scored": home_form["avg_scored"],
-                    "home_avg_allowed": home_form["avg_allowed"],
-                    "home_win_rate": home_form["win_rate"],
-                    "away_avg_scored": away_form["avg_scored"],
-                    "away_avg_allowed": away_form["avg_allowed"],
-                    "away_win_rate": away_form["win_rate"]
-                }
-
-                X_today = pd.DataFrame(
-                    [[feature_row[column] for column in features]],
-                    columns=features
-                )
-
-                base_probability = model.predict_proba(
-                    X_today
-                )[0][1]
-
-                base_probability = np.clip(
-                    base_probability,
-                    0.000001,
-                    0.999999
-                )
-
-                logit = np.log(
-                    base_probability /
-                    (1 - base_probability)
-                )
-
-                home_probability = calibrator.predict_proba(
-                    np.array([[logit]])
-                )[0][1]
-
-                away_probability = 1 - home_probability
-
-                favorite = (
-                    home_name
-                    if home_probability >= away_probability
-                    else away_name
-                )
-
-                favorite_probability = max(
-                    home_probability,
-                    away_probability
-                )
-
-                odds_key = (
-                    normalize_team_name(away_name),
-                    normalize_team_name(home_name)
-                )
-
-                odds = odds_lookup.get(odds_key)
-
-                home_odds = None
-                away_odds = None
-                home_edge = None
-                away_edge = None
-                home_roi = None
-                away_roi = None
-
-                sportsbook = "Unavailable"
-
-                if odds:
-
-                    home_odds = odds["home_odds"]
-                    away_odds = odds["away_odds"]
-
-                    sportsbook = odds["bookmaker"]
-
-                    def implied_probability(price):
-
-                        if price > 0:
-                            return 100 / (price + 100)
-
-                        return abs(price) / (
-                            abs(price) + 100
-                        )
-
-                    home_market = implied_probability(
-                        home_odds
-                    )
-
-                    away_market = implied_probability(
-                        away_odds
-                    )
-
-                    total_market = (
-                        home_market + away_market
-                    )
-
-                    home_market /= total_market
-                    away_market /= total_market
-
-                    home_edge = (
-                        home_probability - home_market
-                    )
-
-                    away_edge = (
-                        away_probability - away_market
-                    )
-
-                    home_decimal = (
-                        1 + home_odds / 100
-                        if home_odds > 0
-                        else 1 + 100 / abs(home_odds)
-                    )
-
-                    away_decimal = (
-                        1 + away_odds / 100
-                        if away_odds > 0
-                        else 1 + 100 / abs(away_odds)
-                    )
-
-                    home_roi = (
-                        home_probability * home_decimal - 1
-                    )
-
-                    away_roi = (
-                        away_probability * away_decimal - 1
-                    )
-
-                predictions.append({
-
-                    "Game": f"{away_name} @ {home_name}",
-
-                    "Model Favorite": favorite,
-
-                    "Favorite Probability": favorite_probability,
-
-                    "Away Probability": away_probability,
-
-                    "Home Probability": home_probability,
-
-                    "Sportsbook": sportsbook,
-
-                    "Away Moneyline": away_odds,
-
-                    "Home Moneyline": home_odds,
-
-                    "Away Market Edge": away_edge,
-
-                    "Home Market Edge": home_edge,
-
-                    "Away Expected ROI": away_roi,
-
-                    "Home Expected ROI": home_roi,
-
-                    "Game Time (Arizona)": (
-                        game_time
-                        .tz_convert("America/Phoenix")
-                        .strftime("%I:%M %p")
-                    )
-
-                })
-
-        # ==================================
-        # DISPLAY PREDICTIONS
-        # ==================================
-
-        if predictions:
-
-            picks_df = pd.DataFrame(predictions)
-
-            picks_df = picks_df.sort_values(
-                "Favorite Probability",
-                ascending=False
+            st.warning(
+                "No eligible pregame predictions were generated."
             )
 
-            st.success(
-                f"MODEL ONLINE — {len(picks_df)} "
-                "eligible games analyzed"
-            )
-
-            st.subheader("👑 TODAY'S MODEL PICKS")
-
-            percentage_columns = [
-                "Favorite Probability",
-                "Away Probability",
-                "Home Probability",
-                "Away Market Edge",
-                "Home Market Edge",
-                "Away Expected ROI",
-                "Home Expected ROI"
-            ]
-
-            st.dataframe(
-                picks_df.style.format(
-                    {
-                        column: "{:.2%}"
-                        for column in percentage_columns
-                    },
-                    na_rep="—"
-                ).format(
-                    {
-                        "Away Moneyline": "{:+.0f}",
-                        "Home Moneyline": "{:+.0f}"
-                    },
-                    na_rep="—"
-                ),
-                use_container_width=True,
-                hide_index=True
-            )
-
-            csv_data = picks_df.to_csv(
-                index=False
-            ).encode("utf-8")
-
-            st.download_button(
-                "📥 DOWNLOAD TODAY'S PICKS",
-                data=csv_data,
-                file_name="PARLAY_KINGZ_DAILY_PICKS.csv",
-                mime="text/csv"
+            st.write(
+                "This can happen when there are no upcoming games, "
+                "team names cannot be matched, or teams do not "
+                "have enough historical data."
             )
 
         else:
 
-            st.warning(
-                "No eligible upcoming games were found for today."
+            st.success(
+                f"{len(predictions)} predictions generated."
+            )
+
+            st.divider()
+
+            for number, pick in enumerate(
+                predictions,
+                start=1
+            ):
+
+                probability = (
+                    pick["Win Probability"] * 100
+                )
+
+                st.markdown(
+                    f"""
+                    <div class="pick-card">
+                        <div class="pick-label">
+                            PARLAY KINGZ PICK #{number}
+                        </div>
+                        <div class="pick-team">
+                            {pick["Predicted Winner"]}
+                        </div>
+                        <div class="pick-probability">
+                            {probability:.1f}% model probability
+                        </div>
+                        <p>
+                            {pick["Game"]}
+                        </p>
+                        <p>
+                            Game Time: {pick["Game Time"]} Arizona
+                        </p>
+                    </div>
+                    """,
+                    unsafe_allow_html=True
+                )
+
+                with st.expander(
+                    f"View matchup details - Pick #{number}"
+                ):
+
+                    st.write(
+                        f"Home team: {pick['Home Team']}"
+                    )
+
+                    st.write(
+                        f"Away team: {pick['Away Team']}"
+                    )
+
+                    st.write(
+                        f"Home win probability: "
+                        f"{pick['Home Probability']:.1%}"
+                    )
+
+                    st.write(
+                        f"Away win probability: "
+                        f"{pick['Away Probability']:.1%}"
+                    )
+
+                    st.write(
+                        f"Home historical games used: "
+                        f"{pick['Home Games Used']}"
+                    )
+
+                    st.write(
+                        f"Away historical games used: "
+                        f"{pick['Away Games Used']}"
+                    )
+
+            export_data = pd.DataFrame(predictions)
+
+            st.download_button(
+                "📥 Download Daily Picks CSV",
+                data=export_data.to_csv(
+                    index=False
+                ).encode("utf-8"),
+                file_name=(
+                    f"PARLAY_KINGZ_PICKS_"
+                    f"{today.strftime('%Y%m%d')}.csv"
+                ),
+                mime="text/csv",
+                use_container_width=True
             )
 
         if skipped:
@@ -907,7 +802,15 @@ elif page == "Daily Picks":
             ):
 
                 for reason in skipped:
-                    st.write("• " + reason)
+                    st.write(f"• {reason}")
+
+    except requests.RequestException as error:
+
+        st.error(
+            "ESPN schedule could not be reached."
+        )
+
+        st.code(str(error))
 
     except Exception as error:
 
@@ -918,13 +821,159 @@ elif page == "Daily Picks":
         st.code(str(error))
 
 
-# ==========================================
+# =========================================================
+# MODEL INFORMATION PAGE
+# =========================================================
+
+elif selected_page == "🧠 Model Information":
+
+    st.subheader("🧠 Model Information")
+
+    st.write(
+        "PARLAY KINGZ uses its existing trained "
+        "Random Forest model with a separate "
+        "probability calibration model."
+    )
+
+    st.divider()
+
+    st.markdown("### Model Architecture")
+
+    st.write("Base model: Random Forest Classifier")
+
+    st.write("Calibration: Logistic Regression")
+
+    st.write("Prediction target: Home team win")
+
+    st.write("Target value 1 = Home win")
+
+    st.write("Target value 0 = Away win")
+
+    st.divider()
+
+    st.markdown("### Model Features")
+
+    for feature in REQUIRED_FEATURES:
+        st.write(f"• {feature}")
+
+    st.divider()
+
+    st.markdown("### Historical Test Results")
+
+    col1, col2 = st.columns(2)
+
+    col1.metric(
+        "Test Accuracy",
+        "65.37%"
+    )
+
+    col2.metric(
+        "Balanced Accuracy",
+        "64.37%"
+    )
+
+    col3, col4 = st.columns(2)
+
+    col3.metric(
+        "Brier Score",
+        "0.2146"
+    )
+
+    col4.metric(
+        "AUC",
+        "0.7029"
+    )
+
+    st.info(
+        "These are historical model evaluation results, "
+        "not a guarantee of future accuracy or betting profit. "
+        "A predicted probability is not a guaranteed outcome."
+    )
+
+    st.divider()
+
+    st.markdown("### Model Backup")
+
+    st.write(
+        "The website loads the existing private model backup. "
+        "It does not automatically retrain or overwrite the model."
+    )
+
+    st.write(
+        f"Backup file found: {'Yes' if BACKUP_PATH.exists() else 'No'}"
+    )
+
+
+# =========================================================
+# HISTORICAL DATA PAGE
+# =========================================================
+
+elif selected_page == "📊 Historical Data":
+
+    st.subheader("📊 Historical Data")
+
+    st.write(
+        "Historical records used by the prediction engine."
+    )
+
+    st.metric(
+        "Historical Team Records",
+        f"{len(raw_scores):,}"
+    )
+
+    st.divider()
+
+    st.markdown("### Recent Historical Records")
+
+    display_columns = [
+        column
+        for column in [
+            "game_date_time",
+            "team_name",
+            "team_location",
+            "team_score",
+            "opponent_team_score",
+            "team_winner"
+        ]
+        if column in raw_scores.columns
+    ]
+
+    recent_data = raw_scores.sort_values(
+        "game_date_time",
+        ascending=False
+    ).head(100)
+
+    st.dataframe(
+        recent_data[display_columns],
+        use_container_width=True,
+        hide_index=True
+    )
+
+    st.download_button(
+        "📥 Download Historical Data",
+        data=raw_scores.to_csv(
+            index=False
+        ).encode("utf-8"),
+        file_name="PARLAY_KINGZ_HISTORICAL_DATA.csv",
+        mime="text/csv",
+        use_container_width=True
+    )
+
+
+# =========================================================
 # FOOTER
-# ==========================================
+# =========================================================
 
 st.divider()
 
-st.caption(
-    "PARLAY KINGZ | Existing trained model | "
-    "No automatic retraining"
+st.markdown(
+    """
+    <div style="text-align:center; color:#d4af37;">
+        👑 PARLAY KINGZ
+    </div>
+    <div style="text-align:center; color:#8b95a5; font-size:12px;">
+        DATA • ANALYSIS • DISCIPLINE
+    </div>
+    """,
+    unsafe_allow_html=True
 )
