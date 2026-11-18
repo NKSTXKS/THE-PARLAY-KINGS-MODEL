@@ -210,20 +210,13 @@ st.write("Master ledger records:", f"{len(ledger):,}")
 # DAILY PICKS PAGE
 # =====================================
 
-if page == "Daily Picks":
-    st.title("🏀 DAILY KINGZ PICKS")
-    st.write("Today's college basketball model predictions.")
-
-elif page == "Model Information":
+if page == "Model Information":
     st.title("📊 MODEL INFORMATION")
     st.write("PARLAY KINGZ trained model and calibration details.")
 
 elif page == "Historical Data":
     st.title("📚 HISTORICAL PERFORMANCE")
     st.write("Historical scores and model records.")
-
-else:
-    st.title("👑 WELCOME TO THE KINGDOM")
 # =====================================
 # DAILY PICKS - LIVE PREDICTION ENGINE
 # =====================================
@@ -232,7 +225,9 @@ if page == "Daily Picks":
     st.divider()
     st.header("🏀 PARLAY KINGZ — DAILY PICKS")
 
-# Today's date in Arizona
+if page == "Daily Picks":
+
+    # Today's date in Arizona
 today = datetime.now(ZoneInfo("America/Phoenix"))
 date_string = today.strftime("%Y%m%d")
 
