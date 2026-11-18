@@ -164,6 +164,34 @@ def get_daily_schedule(date_value):
     )
     response.raise_for_status()
     return response.json()
+    
+
+# =====================================
+# FREE COLLEGE BASKETBALL ODDS FEED
+# =====================================
+
+@st.cache_data(ttl=300)
+def get_college_basketball_odds():
+    api_key = st.secrets["ODDS_API_KEY"]
+
+    url = (
+        "https://api.the-odds-api.com/v4/sports/"
+        "basketball_ncaab/odds"
+    )
+
+    response = requests.get(
+        url,
+        params={
+            "apiKey": api_key,
+            "regions": "us",
+            "markets": "h2h",
+            "oddsFormat": "american"
+        },
+        timeout=20
+    )
+
+    response.raise_for_status()
+    return response.json()
 
 def normalize_team_name(name):
     name = str(name).lower()
