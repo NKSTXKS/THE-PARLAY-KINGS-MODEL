@@ -21,12 +21,6 @@ from pathlib import Path
 # PARLAY KINGZ WEBSITE
 # =====================================
 
-st.set_page_config(
-    page_title="PARLAY KINGZ",
-    page_icon="👑",
-    layout="wide"
-)
-
 # =====================================
 # PRIVATE MODEL BACKUP
 # =====================================
