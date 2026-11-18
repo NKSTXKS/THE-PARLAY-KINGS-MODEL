@@ -41,7 +41,7 @@ page = st.sidebar.radio(
 # PARLAY KINGZ HOMEPAGE
 # =====================================
 if page == "Home":  
-st.markdown("""
+    st.markdown("""
 <style>
 .stApp {
     background: linear-gradient(145deg, #080b12, #171b27);
