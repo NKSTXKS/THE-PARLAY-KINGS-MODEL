@@ -1,4 +1,20 @@
 
+import streamlit as st
+import joblib
+import requests
+import pandas as pd
+import numpy as np
+import re
+from pathlib import Path
+from datetime import datetime
+from zoneinfo import ZoneInfo
+
+st.set_page_config(
+    page_title="PARLAY KINGZ",
+    page_icon="👑",
+    layout="wide"
+)
+
 import joblib
 from pathlib import Path
 
