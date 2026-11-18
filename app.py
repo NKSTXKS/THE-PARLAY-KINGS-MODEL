@@ -12,10 +12,11 @@ st.set_page_config(
     page_title="PARLAY KINGZ",
     page_icon="👑",
     layout="wide"
+    
 )
 # =====================================
 # PRIVATE MODEL BACKUP
-
+# =====================================
 BACKUP_PATH = (
     Path(__file__).parent /
     "PARLAY_KINGZ_PRIVATE_BACKUP.joblib"
