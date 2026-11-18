@@ -138,19 +138,268 @@ st.write("Historical score records:", f"{len(raw_scores):,}")
 st.write("Master ledger records:", f"{len(ledger):,}")
 
 # =====================================
-# DAILY PICKS - COMING NEXT
+
+# =====================================
+# DAILY PICKS - LIVE PREDICTION ENGINE
 # =====================================
 
 st.divider()
+st.header("🏀 PARLAY KINGZ — DAILY PICKS")
 
-st.header("🏀 Daily College Basketball Picks")
+# Today's date in Arizona
+today = datetime.now(ZoneInfo("America/Phoenix"))
+date_string = today.strftime("%Y%m%d")
 
-st.info(
-    "Your existing model is connected. "
-    "The live schedule and daily prediction engine "
-    "will be added in the next development step."
+ESPN_URL = (
+    "https://site.api.espn.com/apis/site/v2/sports/"
+    "basketball/mens-college-basketball/scoreboard"
 )
 
+@st.cache_data(ttl=300)
+def get_daily_schedule(date_value):
+    response = requests.get(
+        ESPN_URL,
+        params={"dates": date_value, "groups": 50, "limit": 500},
+        timeout=20
+    )
+    response.raise_for_status()
+    return response.json()
+
+def normalize_team_name(name):
+    name = str(name).lower()
+    name = re.sub(r"[^a-z0-9]", "", name)
+    return name
+
+def build_team_lookup(data):
+    name_columns = [
+        "team_display_name",
+        "team_name",
+        "team_location",
+        "team_short_display_name",
+        "team_abbreviation",
+        "team_nickname"
+    ]
+
+    lookup = {}
+
+    for column in name_columns:
+        if column not in data.columns:
+            continue
+
+        for team_id, name in zip(data["team_id"], data[column]):
+            if pd.notna(name):
+                lookup[normalize_team_name(name)] = int(team_id)
+
+    return lookup
+
+def get_team_form(team_id, game_time):
+    history = raw_scores.copy()
+
+    history["parsed_time"] = pd.to_datetime(
+        history["game_date_time"],
+        utc=True,
+        errors="coerce"
+    )
+
+    cutoff = pd.Timestamp(game_time) - pd.Timedelta(hours=3)
+
+    history = history[
+        (history["team_id"] == team_id) &
+        (history["parsed_time"] < cutoff)
+    ].copy()
+
+    history = history.sort_values("parsed_time").tail(5)
+
+    if len(history) < 3:
+        return None
+
+    points_allowed_column = next(
+        (
+            column for column in [
+                "opponent_team_score",
+                "team_points_allowed",
+                "opponent_score"
+            ]
+            if column in history.columns
+        ),
+        None
+    )
+
+    if points_allowed_column is None:
+        raise ValueError(
+            "Could not find the historical points-allowed column."
+        )
+
+    return {
+        "avg_scored": pd.to_numeric(
+            history["team_score"], errors="coerce"
+        ).mean(),
+        "avg_allowed": pd.to_numeric(
+            history[points_allowed_column], errors="coerce"
+        ).mean(),
+        "win_rate": history["team_winner"].astype(float).mean()
+    }
+
+try:
+    schedule = get_daily_schedule(date_string)
+    team_lookup = build_team_lookup(raw_scores)
+
+    predictions = []
+    skipped = []
+
+    for event in schedule.get("events", []):
+        status = (
+            event.get("status", {})
+            .get("type", {})
+            .get("state", "")
+        )
+
+        if status != "pre":
+            continue
+
+        competition = event.get("competitions", [{}])[0]
+        competitors = competition.get("competitors", [])
+
+        home = next(
+            (team for team in competitors
+             if team.get("homeAway") == "home"),
+            None
+        )
+
+        away = next(
+            (team for team in competitors
+             if team.get("homeAway") == "away"),
+            None
+        )
+
+        if not home or not away:
+            continue
+
+        game_time = pd.to_datetime(
+            event.get("date"),
+            utc=True,
+            errors="coerce"
+        )
+
+        if pd.isna(game_time):
+            continue
+
+        home_name = home.get("team", {}).get("displayName", "Home")
+        away_name = away.get("team", {}).get("displayName", "Away")
+
+        home_id = team_lookup.get(normalize_team_name(home_name))
+        away_id = team_lookup.get(normalize_team_name(away_name))
+
+        if home_id is None or away_id is None:
+            skipped.append(
+                f"{away_name} vs {home_name}: team not matched"
+            )
+            continue
+
+        home_form = get_team_form(home_id, game_time)
+        away_form = get_team_form(away_id, game_time)
+
+        if home_form is None or away_form is None:
+            skipped.append(
+                f"{away_name} vs {home_name}: insufficient history"
+            )
+            continue
+
+        feature_row = {
+            "home_avg_scored": home_form["avg_scored"],
+            "home_avg_allowed": home_form["avg_allowed"],
+            "home_win_rate": home_form["win_rate"],
+            "away_avg_scored": away_form["avg_scored"],
+            "away_avg_allowed": away_form["avg_allowed"],
+            "away_win_rate": away_form["win_rate"]
+        }
+
+        X_today = pd.DataFrame(
+            [[feature_row[column] for column in features]],
+            columns=features
+        )
+
+        base_probability = model.predict_proba(X_today)[0][1]
+        base_probability = np.clip(
+            base_probability, 0.000001, 0.999999
+        )
+
+        logit = np.log(
+            base_probability / (1 - base_probability)
+        )
+
+        home_probability = calibrator.predict_proba(
+            np.array([[logit]])
+        )[0][1]
+
+        away_probability = 1 - home_probability
+
+        favorite = (
+            home_name if home_probability >= away_probability
+            else away_name
+        )
+
+        favorite_probability = max(
+            home_probability, away_probability
+        )
+
+        predictions.append({
+            "Game": f"{away_name} @ {home_name}",
+            "Model Favorite": favorite,
+            "Favorite Probability": favorite_probability,
+            "Away Probability": away_probability,
+            "Home Probability": home_probability,
+            "Game Time (UTC)": game_time.strftime("%I:%M %p")
+        })
+
+    if predictions:
+        picks_df = pd.DataFrame(predictions)
+
+        picks_df = picks_df.sort_values(
+            "Favorite Probability",
+            ascending=False
+        )
+
+        st.success(
+            f"🟢 MODEL ONLINE — {len(picks_df)} games analyzed"
+        )
+
+        st.dataframe(
+            picks_df.style.format({
+                "Favorite Probability": "{:.2%}",
+                "Away Probability": "{:.2%}",
+                "Home Probability": "{:.2%}"
+            }),
+            use_container_width=True,
+            hide_index=True
+        )
+
+        csv_data = picks_df.to_csv(index=False).encode("utf-8")
+
+        st.download_button(
+            "📥 Download Today's Picks",
+            data=csv_data,
+            file_name="PARLAY_KINGZ_DAILY_PICKS.csv",
+            mime="text/csv"
+        )
+
+    else:
+        st.warning(
+            "No eligible upcoming games were found for today."
+        )
+
+    if skipped:
+        with st.expander(
+            f"Games skipped ({len(skipped)})"
+        ):
+            for reason in skipped:
+                st.write("• " + reason)
+
+except Exception as error:
+    st.error("The daily prediction engine encountered an issue.")
+    st.code(str(error))
+
 st.caption(
-    "PARLAY KINGZ | Private Development Dashboard"
+    "PARLAY KINGZ | Existing trained model | "
+    "No automatic retraining"
 )
