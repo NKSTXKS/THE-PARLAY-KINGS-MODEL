@@ -393,16 +393,20 @@ def build_odds_lookup():
         return {}
 
    if page == "Daily Picks":
-    try:
+        try:
         schedule = get_daily_schedule(date_string)
-        team_lookup = build_team_lookup(raw_scores)
+              team_lookup = build_team_lookup(raw_scores)
         odds_lookup = build_odds_lookup()
 
         predictions = []
         skipped = []
 
-         for event in schedule.get("events", []):
-             status = (
+        for event in schedule.get("events", []):
+            status = (
+                event.get("status", {})
+                .get("type", {})
+                .get("state", "")
+            )
                 event.get("status", {})
                 .get("type", {})
                 .get("state", "")
