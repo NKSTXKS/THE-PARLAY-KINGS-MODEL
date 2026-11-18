@@ -41,7 +41,6 @@ page = st.sidebar.radio(
 # PARLAY KINGZ HOMEPAGE
 # =====================================
 if page == "Home":  
-    
 st.markdown("""
 <style>
 .stApp {
