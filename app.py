@@ -4,7 +4,7 @@ import joblib
 import requests
 import pandas as pd
 import numpy as np
-
+from nba_engine import render_nba_tab
 from pathlib import Path
 from datetime import datetime
 from zoneinfo import ZoneInfo
