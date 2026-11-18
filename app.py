@@ -8,8 +8,11 @@ from pathlib import Path
 from datetime import datetime
 from zoneinfo import ZoneInfo
 
-
-import joblib
+st.set_page_config(
+    page_title="PARLAY KINGZ",
+    page_icon="👑",
+    layout="wide"
+)
 from pathlib 
 # =====================================
 # PRIVATE MODEL BACKUP
