@@ -268,6 +268,49 @@ def get_team_form(team_id, game_time):
         "win_rate": history["team_winner"].astype(float).mean()
     }
 
+def build_odds_lookup():
+    try:
+        events = get_college_basketball_odds()
+        odds_lookup = {}
+
+        for event in events:
+            home_name = event.get("home_team", "")
+            away_name = event.get("away_team", "")
+
+            for bookmaker in event.get("bookmakers", []):
+                for market in bookmaker.get("markets", []):
+                    if market.get("key") != "h2h":
+                        continue
+
+                    prices = {}
+
+                    for outcome in market.get("outcomes", []):
+                        prices[normalize_team_name(
+                            outcome.get("name", "")
+                        )] = outcome.get("price")
+
+                    home_key = normalize_team_name(home_name)
+                    away_key = normalize_team_name(away_name)
+
+                    if home_key in prices and away_key in prices:
+                        odds_lookup[
+                            (away_key, home_key)
+                        ] = {
+                            "home_odds": prices[home_key],
+                            "away_odds": prices[away_key],
+                            "bookmaker": bookmaker.get("title", "Sportsbook")
+                        }
+
+                if (normalize_team_name(away_name),
+                    normalize_team_name(home_name)) in odds_lookup:
+                    break
+
+        return odds_lookup
+
+    except Exception as error:
+        st.warning(f"Odds feed unavailable: {error}")
+        return {}
+
 try:
     schedule = get_daily_schedule(date_string)
     team_lookup = build_team_lookup(raw_scores)
