@@ -486,6 +486,6 @@ try:
             "Away Expected ROI": away_roi,
             "Home Expected ROI": home_roi,
             "Game Time (UTC)": game_time.strftime("%I:%M %p")
-        })
+        
 
-)
+
