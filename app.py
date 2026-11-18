@@ -126,6 +126,7 @@ st.markdown(
 pages = [
     "🏠 Home",
     "🎯 Daily Picks",
+    "🏀 NBA Predictions",
     "🧠 Model Information",
     "📊 Historical Data"
 ]
@@ -820,7 +821,13 @@ elif selected_page == "🎯 Daily Picks":
 
         st.code(str(error))
 
+# =========================================================
+# NBA PREDICTIONS PAGE
+# =========================================================
 
+elif selected_page == "🏀 NBA Predictions":
+
+    render_nba_tab()
 # =========================================================
 # MODEL INFORMATION PAGE
 # =========================================================
