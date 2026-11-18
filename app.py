@@ -19,6 +19,8 @@ st.set_page_config(
 # =====================================
 BACKUP_PATH = (
     Path(__file__).parent /
+    "PARLAY_KINGZ_PRIVATE_BACKUP.joblib"
+)
 
     
 # =====================================
