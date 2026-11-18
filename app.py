@@ -8,11 +8,6 @@ from pathlib import Path
 from datetime import datetime
 from zoneinfo import ZoneInfo
 
-st.set_page_config(
-    page_title="PARLAY KINGZ",
-    page_icon="👑",
-    layout="wide"
-)
 
 import joblib
 from pathlib 
