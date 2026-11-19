@@ -253,23 +253,33 @@ footer {
 </style>
 """, unsafe_allow_html=True)
 
-# =========================================================
-# HEADER
-# =========================================================
-
-st.markdown(
-    '<div class="main-title">👑 PARLAY KINGZ</div>',
-    unsafe_allow_html=True
-)
-
-st.markdown(
-    '<div class="subtitle">COLLEGE BASKETBALL PREDICTION ENGINE</div>',
-    unsafe_allow_html=True
-)
-
 
 # =========================================================
-# NAVIGATION - MAIN SCREEN, NOT SIDEBAR
+# CLASSIFIED KINGZ INTELLIGENCE — HEADER
+# =========================================================
+
+st.markdown("""
+<div class="main-title">
+    👑 PARLAY KINGZ AI
+</div>
+<div class="subtitle">
+    CLASSIFIED SPORTS INTELLIGENCE NETWORK
+</div>
+<div style="
+    text-align:center;
+    color:#c5a45b;
+    font-family:monospace;
+    font-size:11px;
+    letter-spacing:3px;
+    margin-bottom:20px;
+">
+    [ SECURE ACCESS ] // [ INTELLIGENCE DIVISION ]
+</div>
+""", unsafe_allow_html=True)
+
+
+# =========================================================
+# CLASSIFIED NAVIGATION
 # =========================================================
 
 pages = [
@@ -280,19 +290,35 @@ pages = [
     "📊 Historical Data"
 ]
 
+nav_labels = {
+    "🏠 Home": "⌂  NEXUS",
+    "🎯 Daily Picks": "01 // COLLEGE INTEL",
+    "🏀 NBA Predictions": "02 // NBA INTEL",
+    "🧠 Model Information": "03 // SYSTEM DOSSIER",
+    "📊 Historical Data": "04 // DATA ARCHIVE"
+}
+
 if "selected_page" not in st.session_state:
     st.session_state.selected_page = "🏠 Home"
 
 selected_page = st.radio(
-    "Navigation",
+    "CLASSIFIED OPERATIONS",
     pages,
+    format_func=lambda page: nav_labels[page],
     horizontal=True,
     label_visibility="collapsed",
     key="selected_page"
 )
 
-st.divider()
-
+st.markdown("""
+<div style="
+    border-bottom:1px solid #c5a45b66;
+    margin-top:12px;
+    margin-bottom:25px;
+    position:relative;
+">
+</div>
+""", unsafe_allow_html=True)
 
 # =========================================================
 # MODEL BACKUP
