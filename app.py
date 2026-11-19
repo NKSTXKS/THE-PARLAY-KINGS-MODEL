@@ -22,87 +22,236 @@ st.set_page_config(
 )
 
 
+
+
 # =========================================================
-# DESIGN
+# CLASSIFIED KINGZ INTELLIGENCE — DESIGN
 # =========================================================
 
 st.markdown("""
 <style>
-    .stApp {
-        background-color: #080b12;
-        color: #ffffff;
-    }
+@import url('https://fonts.googleapis.com/css2?family=Orbitron:wght@400;500;600;700;800;900&family=Rajdhani:wght@400;500;600;700&display=swap');
 
-    h1, h2, h3 {
-        color: #ffffff;
+:root {
+    --kingz-black: #07070b;
+    --kingz-panel: #111019;
+    --kingz-gold: #c5a45b;
+    --kingz-gold-light: #f0d58a;
+    --kingz-violet: #7553a6;
+    --kingz-text: #e8e1d4;
+    --kingz-muted: #817b8d;
+}
+
+.stApp {
+    background:
+        radial-gradient(ellipse at 50% -20%, #302044 0%, transparent 48%),
+        linear-gradient(145deg, #08080d, #101019 55%, #08080d);
+    color: var(--kingz-text);
+    font-family: 'Rajdhani', sans-serif;
+}
+
+.stApp::before {
+    content: "";
+    position: fixed;
+    inset: 0;
+    pointer-events: none;
+    z-index: 0;
+    opacity: .13;
+    background-image:
+        linear-gradient(rgba(197,164,91,.08) 1px, transparent 1px),
+        linear-gradient(90deg, rgba(197,164,91,.08) 1px, transparent 1px);
+    background-size: 45px 45px;
+    mask-image: linear-gradient(to bottom, black, transparent 85%);
+}
+
+header[data-testid="stHeader"] {
+    background: transparent;
+}
+
+.block-container {
+    position: relative;
+    z-index: 1;
+    padding-top: 2rem;
+    max-width: 1500px;
+}
+
+h1, h2, h3 {
+    color: var(--kingz-gold-light) !important;
+    font-family: 'Orbitron', sans-serif !important;
+    letter-spacing: 1px;
+}
+
+.main-title {
+    text-align: center;
+    font-family: 'Orbitron', sans-serif;
+    font-size: clamp(25px, 5vw, 43px);
+    font-weight: 900;
+    letter-spacing: 4px;
+    color: var(--kingz-gold-light);
+    text-shadow: 0 0 12px #c5a45b66, 0 0 35px #7553a655;
+    margin-bottom: 5px;
+    animation: kingzReveal 1.4s ease-out both;
+}
+
+.subtitle {
+    text-align: center;
+    color: #a99bbd;
+    font-family: 'Rajdhani', sans-serif;
+    font-size: 13px;
+    letter-spacing: 5px;
+    margin-bottom: 25px;
+    text-transform: uppercase;
+}
+
+.pick-card {
+    background: linear-gradient(135deg, #171520, #0d0c13);
+    border: 1px solid #7553a677;
+    border-left: 3px solid var(--kingz-gold);
+    border-radius: 5px;
+    padding: 20px;
+    margin-bottom: 15px;
+    box-shadow: 0 0 18px #00000088;
+    animation: kingzReveal .7s ease-out both;
+    transition: border-color .3s, box-shadow .3s, transform .3s;
+}
+
+.pick-card:hover {
+    border-color: var(--kingz-gold);
+    box-shadow: 0 0 22px #c5a45b33;
+    transform: translateY(-2px);
+}
+
+.pick-team {
+    color: #f3e7cb;
+    font-size: 23px;
+    font-weight: 800;
+}
+
+.pick-label {
+    color: var(--kingz-gold);
+    font-family: 'Orbitron', sans-serif;
+    font-size: 11px;
+    letter-spacing: 2px;
+}
+
+.pick-probability {
+    color: #b89be8;
+    font-family: 'Orbitron', sans-serif;
+    font-size: 24px;
+    font-weight: 900;
+}
+
+div[data-testid="stMetric"] {
+    background: linear-gradient(145deg, #171520, #0e0d14);
+    border: 1px solid #7553a655;
+    border-radius: 5px;
+    padding: 14px;
+    box-shadow: inset 0 0 15px #7553a611;
+}
+
+div[data-testid="stMetric"] label {
+    color: var(--kingz-muted) !important;
+    letter-spacing: 2px;
+    text-transform: uppercase;
+    font-family: 'Orbitron', sans-serif;
+    font-size: 10px;
+}
+
+div[data-testid="stMetric"] [data-testid="stMetricValue"] {
+    color: var(--kingz-gold-light) !important;
+    font-family: 'Orbitron', sans-serif;
+}
+
+div.stButton > button,
+div[data-testid="stDownloadButton"] button {
+    background: linear-gradient(110deg, #251c31, #17131e);
+    color: var(--kingz-gold-light);
+    border: 1px solid #a88a51;
+    border-radius: 3px;
+    font-family: 'Orbitron', sans-serif;
+    letter-spacing: 1px;
+    font-size: 11px;
+    transition: all .25s ease;
+}
+
+div.stButton > button:hover,
+div[data-testid="stDownloadButton"] button:hover {
+    background: #332542;
+    border-color: var(--kingz-gold-light);
+    box-shadow: 0 0 18px #c5a45b44;
+    color: white;
+}
+
+[data-testid="stRadio"] {
+    background: linear-gradient(135deg, #15131d, #0b0a10);
+    border: 1px solid #7553a655;
+    border-radius: 5px;
+    padding: 12px;
+}
+
+[data-testid="stRadio"] label {
+    color: var(--kingz-text);
+}
+
+.stTabs [data-baseweb="tab"] {
+    color: var(--kingz-muted);
+}
+
+hr {
+    border-color: #7553a644 !important;
+}
+
+[data-testid="stExpander"] {
+    background: #111019;
+    border: 1px solid #7553a644;
+    border-radius: 4px;
+}
+
+[data-testid="stDataFrame"] {
+    border: 1px solid #7553a655;
+}
+
+footer {
+    visibility: hidden;
+}
+
+@keyframes kingzReveal {
+    from {
+        opacity: 0;
+        transform: translateY(12px);
+    }
+    to {
+        opacity: 1;
+        transform: translateY(0);
+    }
+}
+
+@keyframes kingzPulse {
+    0%, 100% { box-shadow: 0 0 5px #c5a45b22; }
+    50% { box-shadow: 0 0 18px #c5a45b66; }
+}
+
+@media (max-width: 700px) {
+    .block-container {
+        padding-left: 1rem;
+        padding-right: 1rem;
     }
 
     .main-title {
-        text-align: center;
-        font-size: 38px;
-        font-weight: 900;
-        color: #d4af37;
-        margin-bottom: 0;
+        letter-spacing: 2px;
     }
 
     .subtitle {
-        text-align: center;
-        color: #b8c0cc;
-        font-size: 14px;
-        margin-bottom: 25px;
-    }
-
-    .pick-card {
-        background: #151c29;
-        border: 1px solid #35445c;
-        border-radius: 12px;
-        padding: 18px;
-        margin-bottom: 14px;
-    }
-
-    .pick-team {
-        color: #ffffff;
-        font-size: 21px;
-        font-weight: 800;
-    }
-
-    .pick-label {
-        color: #d4af37;
-        font-size: 13px;
-        font-weight: 700;
-    }
-
-    .pick-probability {
-        color: #39d98a;
-        font-size: 25px;
-        font-weight: 900;
-    }
-
-    div[data-testid="stMetric"] {
-        background: #151c29;
-        border: 1px solid #35445c;
-        padding: 12px;
-        border-radius: 10px;
-    }
-
-    div.stButton > button {
-        width: 100%;
-        border-radius: 8px;
-        font-weight: 700;
+        letter-spacing: 2px;
+        font-size: 10px;
     }
 
     [data-testid="stRadio"] {
-        background: #151c29;
-        padding: 12px;
-        border-radius: 10px;
+        padding: 7px;
     }
-
-    footer {
-        visibility: hidden;
-    }
+}
 </style>
 """, unsafe_allow_html=True)
-
 
 # =========================================================
 # HEADER
